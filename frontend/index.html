@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diffusion Dynamics — Agentic Material Designer</title>
+    <meta name="description" content="Conversational AI for molecular material design using PINO-FNO and EGNN diffusion">
+    
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+    
+    <style>
+        :root {
+            --bg-deep: #0a0a0f;
+            --bg-surface: #12121a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #22223a;
+            --bg-input: #16162a;
+            --bg-chat-user: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            --bg-chat-ai: #1e1e32;
+            
+            --text-main: #e8e8f0;
+            --text-secondary: #9ca3b8;
+            --text-muted: #5c6378;
+            --text-bright: #ffffff;
+            
+            --border-subtle: rgba(124, 58, 237, 0.15);
+            --border-medium: rgba(124, 58, 237, 0.3);
+            --border-glow: rgba(124, 58, 237, 0.5);
+            
+            --accent: #7c3aed;
+            --accent-light: #a78bfa;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+            --accent-subtle: rgba(124, 58, 237, 0.1);
+            --accent-glow: 0 0 30px rgba(124, 58, 237, 0.3);
+            
+            --success: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.1);
+            --warning: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.1);
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --info-bg: rgba(59, 130, 246, 0.1);
+            
+            --radius-xl: 24px;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --radius-xs: 6px;
+            
+            --shadow-glow: 0 0 40px rgba(124, 58, 237, 0.15);
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --shadow-deep: 0 8px 40px rgba(0, 0, 0, 0.5);
+            
+            --transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            --transition-fast: all 0.15s ease;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ═══ Scrollbar ═══ */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        /* ═══ Nav ═══ */
+        nav {
+            padding: 0.9rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+        .nav-brand {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand .logo-icon {
+            width: 32px; height: 32px;
+            background: var(--accent-gradient);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem;
+            box-shadow: var(--accent-glow);
+        }
+        .nav-brand span {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .nav-right {
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .nav-badge {
+            font-size: 0.72rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            background: var(--accent-subtle);
+            color: var(--accent-light);
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            border: 1px solid var(--border-subtle);
+        }
+        .btn-new-chat {
+            background: none;
+            border: 1px solid var(--border-medium);
+            color: var(--text-secondary);
+            padding: 0.4rem 0.9rem;
+            border-radius: var(--radius-sm);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex; align-items: center; gap: 0.4rem;
+        }
+        .btn-new-chat:hover {
+            border-color: var(--accent);
+            color: var(--accent-light);
+            background: var(--accent-subtle);
+        }
+
+        /* ═══ Main Chat Container ═══ */
+        .chat-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ═══ Messages Area ═══ */
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            scroll-behavior: smooth;
+        }
+
+        /* ═══ Message Bubbles ═══ */
+        .message {
+            display: flex;
+            gap: 0.75rem;
+            animation: fadeInMsg 0.4s ease forwards;
+            max-width: 100%;
+        }
+        @keyframes fadeInMsg {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user-msg { flex-direction: row-reverse; }
+        .message.user-msg .msg-content {
+            background: var(--bg-chat-user);
+            color: white;
+            border-radius: var(--radius-lg) var(--radius-xs) var(--radius-lg) var(--radius-lg);
+            max-width: 75%;
+        }
+        .message.ai-msg .msg-content {
+            background: var(--bg-chat-ai);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+            max-width: 85%;
+        }
+        .msg-content {
+            padding: 1rem 1.25rem;
+            font-size: 0.92rem;
+            line-height: 1.65;
+        }
+        .msg-content p { margin-bottom: 0.6rem; }
+        .msg-content p:last-child { margin-bottom: 0; }
+        .msg-content strong { color: var(--text-bright); font-weight: 600; }
+        .msg-content code {
+            font-family: 'Fira Code', monospace;
+            background: rgba(255,255,255,0.06);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        /* AI Avatar */
+        .ai-avatar {
+            width: 34px; height: 34px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-gradient);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 15px rgba(124, 58, 237, 0.25);
+            margin-top: 2px;
+        }
+        .user-avatar {
+            width: 34px; height: 34px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* ═══ Property Cards (inline in messages) ═══ */
+        .property-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+            margin: 0.8rem 0;
+        }
+        .prop-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .prop-card .prop-icon { font-size: 1.1rem; }
+        .prop-card .prop-info { flex: 1; }
+        .prop-card .prop-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .prop-card .prop-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-light);
+        }
+        .prop-card .prop-source {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        /* ═══ Suggestion Chips ═══ */
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.8rem;
+        }
+        .suggestion-chip {
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            color: var(--accent-light);
+            padding: 0.45rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            white-space: nowrap;
+        }
+        .suggestion-chip:hover {
+            background: rgba(124, 58, 237, 0.2);
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        /* ═══ Typing Indicator ═══ */
+        .typing-indicator {
+            display: none;
+            gap: 0.75rem;
+            padding: 0 0 0.5rem;
+        }
+        .typing-indicator.visible { display: flex; }
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+            padding: 1rem 1.25rem;
+            background: var(--bg-chat-ai);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+        }
+        .typing-dots span {
+            width: 8px; height: 8px;
+            background: var(--accent-light);
+            border-radius: 50%;
+            animation: typeBounce 1.4s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typeBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ═══ Generate Button (floating in chat) ═══ */
+        .generate-cta {
+            display: none;
+            margin: 0.5rem 0;
+        }
+        .generate-cta.visible { display: block; }
+        .btn-generate-chat {
+            width: 100%;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: var(--radius-md);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1.05rem;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--accent-glow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            letter-spacing: 0.01em;
+        }
+        .btn-generate-chat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 50px rgba(124, 58, 237, 0.4);
+        }
+        .btn-generate-chat:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ═══ Input Area ═══ */
+        .input-area {
+            padding: 1rem 1.5rem 1.5rem;
+            flex-shrink: 0;
+        }
+        .input-container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            transition: var(--transition);
+        }
+        .input-container:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1), var(--shadow-glow);
+        }
+        .chat-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            padding: 0.7rem 0.8rem;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            outline: none;
+            line-height: 1.5;
+        }
+        .chat-input::placeholder { color: var(--text-muted); }
+        .btn-send {
+            width: 40px; height: 40px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-gradient);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: var(--transition-fast);
+            flex-shrink: 0;
+        }
+        .btn-send:hover { transform: scale(1.05); box-shadow: var(--accent-glow); }
+        .btn-send:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+        .btn-send svg { width: 18px; height: 18px; }
+
+        /* ═══ Molecule Result Cards (in chat) ═══ */
+        .molecule-result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin: 0.5rem 0;
+            transition: var(--transition);
+            width: 100%;
+            align-self: stretch;
+            flex-shrink: 0;
+        }
+        .molecule-result-card:hover {
+            border-color: var(--border-medium);
+            box-shadow: var(--shadow-glow);
+        }
+        .mol-card-header {
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .mol-rank {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .mol-stability-badge {
+            font-size: 0.72rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .mol-stability-badge.high { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16,185,129,0.2); }
+        .mol-stability-badge.medium { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245,158,11,0.2); }
+        .mol-stability-badge.low { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+
+        .mol-card-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+        .mol-viewer-container {
+            position: relative;
+            height: 280px;
+            min-height: 280px;
+            background: #0d0d18;
+            border-right: 1px solid var(--border-subtle);
+            overflow: hidden;
+        }
+        .mol-viewer-3d {
+            width: 100%;
+            height: 280px;
+            display: block;
+        }
+        .mol-details {
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+        .mol-insight {
+            background: rgba(124, 58, 237, 0.06);
+            border-left: 3px solid var(--accent);
+            padding: 0.8rem 1rem;
+            border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .mol-insight strong { color: var(--accent-light); }
+        .mol-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+        }
+        .mol-metric {
+            display: flex; flex-direction: column; gap: 0.15rem;
+        }
+        .mol-metric-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .mol-metric-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+        .mol-metric-value.glow-purple { color: var(--accent-light); }
+        .mol-metric-value.glow-green { color: var(--success); }
+
+        .mol-smiles {
+            font-family: 'Fira Code', monospace;
+            background: rgba(255,255,255,0.03);
+            padding: 0.5rem 0.7rem;
+            border-radius: var(--radius-xs);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            word-break: break-all;
+            border: 1px dashed rgba(255,255,255,0.06);
+            margin-top: auto;
+        }
+
+        /* ═══ Loading Overlay for Generation ═══ */
+        .gen-loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            gap: 1rem;
+        }
+        .gen-loading.visible { display: flex; }
+        .gen-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .gen-loading-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        .gen-loading-sub {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .gen-steps {
+            display: flex; flex-direction: column; gap: 0.4rem;
+            width: 100%; max-width: 400px;
+        }
+        .gen-step {
+            display: flex; align-items: center; gap: 0.6rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            transition: var(--transition);
+        }
+        .gen-step.active { color: var(--accent-light); }
+        .gen-step.done { color: var(--success); }
+        .gen-step-icon { width: 18px; text-align: center; }
+
+        /* ═══ Welcome State ═══ */
+        .welcome-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 4rem 2rem 2rem;
+            gap: 1.2rem;
+            flex: 1;
+        }
+        .welcome-hero.hidden { display: none; }
+        .welcome-logo {
+            width: 64px; height: 64px;
+            border-radius: var(--radius-lg);
+            background: var(--accent-gradient);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem;
+            box-shadow: 0 0 60px rgba(124, 58, 237, 0.3);
+            animation: pulseLogo 3s ease infinite;
+        }
+        @keyframes pulseLogo {
+            0%, 100% { box-shadow: 0 0 30px rgba(124, 58, 237, 0.2); }
+            50% { box-shadow: 0 0 60px rgba(124, 58, 237, 0.4); }
+        }
+        .welcome-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-bright);
+        }
+        .welcome-sub {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            max-width: 500px;
+            line-height: 1.6;
+        }
+        .welcome-examples {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 1rem;
+            width: 100%;
+            max-width: 520px;
+        }
+        .welcome-example {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 0.9rem 1.2rem;
+            text-align: left;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+        .welcome-example:hover {
+            border-color: var(--accent);
+            background: var(--bg-card-hover);
+            color: var(--text-main);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+        .welcome-example .ex-icon {
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        /* ═══ Responsive ═══ */
+        @media (max-width: 768px) {
+            .chat-wrapper { max-width: 100%; }
+            .messages-area { padding: 1rem; }
+            .input-area { padding: 0.75rem 1rem 1rem; }
+            .mol-card-body { grid-template-columns: 1fr; }
+            .mol-viewer-container { min-height: 220px; border-right: none; border-bottom: 1px solid var(--border-subtle); }
+            .property-cards { grid-template-columns: 1fr; }
+            .message.user-msg .msg-content, .message.ai-msg .msg-content { max-width: 90%; }
+            .welcome-title { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-brand">
+            <div class="logo-icon">⚛</div>
+            <span>Diffusion Dynamics</span>
+        </div>
+        <div class="nav-right">
+            <div class="nav-badge">PINO-FNO · EGNN · Agentic</div>
+            <button class="btn-new-chat" id="btnNewChat" onclick="startNewChat()">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                New Chat
+            </button>
+        </div>
+    </nav>
+
+    <div class="chat-wrapper">
+        <!-- Welcome Hero (initial state) -->
+        <div class="welcome-hero" id="welcomeHero">
+            <div class="welcome-logo">🧬</div>
+            <h1 class="welcome-title">Design materials with conversation.</h1>
+            <p class="welcome-sub">
+                Describe your ideal material using everyday comparisons. I'll translate your words into precise molecular parameters and generate 3D candidates.
+            </p>
+            <div class="welcome-examples">
+                <div class="welcome-example" onclick="useExample('I need something as strong as steel but as flexible as rubber and non-corrosive like titanium')">
+                    <span class="ex-icon">🔩</span>
+                    <span>"As strong as steel but flexible as rubber, non-corrosive like titanium"</span>
+                </div>
+                <div class="welcome-example" onclick="useExample('Design a lightweight catalyst for acidic water splitting at 350K')">
+                    <span class="ex-icon">🧪</span>
+                    <span>"A lightweight catalyst for acidic water splitting at 350K"</span>
+                </div>
+                <div class="welcome-example" onclick="useExample('I need a material as breathable as linen but as tough as kevlar for wearable use')">
+                    <span class="ex-icon">🌬️</span>
+                    <span>"Breathable like linen but tough as kevlar — for wearables"</span>
+                </div>
+                <div class="welcome-example" onclick="useExample('Something shiny as gold, hard as diamond, and cheap as aluminum')">
+                    <span class="ex-icon">✨</span>
+                    <span>"Shiny as gold, hard as diamond, cheap as aluminum"</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Area (hidden initially) -->
+        <div class="messages-area" id="messagesArea" style="display: none;">
+            <!-- Messages injected here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-container">
+                <textarea class="chat-input" id="chatInput" placeholder="Describe your ideal material... e.g. 'as strong as steel but flexible as rubber'" rows="1"
+                    oninput="autoResize(this)"></textarea>
+                <button class="btn-send" id="btnSend" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════════════════
+    let sessionId = null;
+    let chatStarted = false;
+    let isGenerating = false;
+    let isWaitingForAI = false;
+    let generatedMolecules = false;
+
+    // Safety: periodically check if flags are stuck (fallback recovery)
+    setInterval(() => {
+        // If no fetch is in flight and no generation spinner visible, reset flags
+        const hasSpinner = document.querySelector('.gen-loading.visible');
+        const hasTyping = document.querySelector('.typing-indicator.visible');
+        if (!hasSpinner && !hasTyping && isWaitingForAI) {
+            console.warn('[Recovery] isWaitingForAI was stuck, resetting.');
+            isWaitingForAI = false;
+            btnSend.disabled = false;
+        }
+        if (!hasSpinner && isGenerating) {
+            console.warn('[Recovery] isGenerating was stuck, resetting.');
+            isGenerating = false;
+        }
+    }, 5000);
+
+    const messagesArea = document.getElementById('messagesArea');
+    const welcomeHero = document.getElementById('welcomeHero');
+    const chatInput = document.getElementById('chatInput');
+    const btnSend = document.getElementById('btnSend');
+
+    // Enter key to send
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    function autoResize(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CORE CHAT FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function startChat() {
+        if (!chatStarted) {
+            chatStarted = true;
+            welcomeHero.classList.add('hidden');
+            messagesArea.style.display = 'flex';
+        }
+    }
+
+    function useExample(text) {
+        chatInput.value = text;
+        autoResize(chatInput);
+        sendMessage();
+    }
+
+    function startNewChat() {
+        // Reset session on server
+        if (sessionId) {
+            fetch('/api/reset_session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId })
+            }).catch(() => {});
+        }
+        sessionId = null;
+        chatStarted = false;
+        isGenerating = false;
+        isWaitingForAI = false;
+        generatedMolecules = false;
+        messagesArea.innerHTML = '';
+        messagesArea.style.display = 'none';
+        welcomeHero.classList.remove('hidden');
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+    }
+
+    async function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text || isWaitingForAI || isGenerating) return;
+
+        startChat();
+
+        // Add user message to UI
+        addUserMessage(text);
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+
+        // Show typing indicator
+        showTyping();
+        isWaitingForAI = true;
+        btnSend.disabled = true;
+
+        try {
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: text,
+                    is_iteration: generatedMolecules
+                })
+            });
+
+            const data = await resp.json();
+            hideTyping();
+
+            if (!data.success) {
+                addAIMessage('⚠️ Something went wrong: ' + (data.error || 'Unknown error'));
+                return;
+            }
+
+            sessionId = data.session_id;
+
+            // Check if this should trigger generation
+            if (data.trigger_generation) {
+                addAIMessage(data.response);
+                // Reset waiting state BEFORE starting generation
+                // so that the flag isn't stuck during the long generation process
+                isWaitingForAI = false;
+                btnSend.disabled = false;
+                await triggerGeneration(data.generation_params);
+                return;
+            }
+
+            // Render AI response with property cards and suggestions
+            addAIMessage(data.response, data.property_cards, data.suggestions, data.ready_to_generate);
+
+        } catch (err) {
+            hideTyping();
+            addAIMessage('⚠️ Connection error. Make sure the server is running on port 5000.\n\n`' + err.message + '`');
+        } finally {
+            isWaitingForAI = false;
+            btnSend.disabled = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MESSAGE RENDERING
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function addUserMessage(text) {
+        const msg = document.createElement('div');
+        msg.className = 'message user-msg';
+        msg.innerHTML = `
+            <div class="msg-content"><p>${escapeHtml(text)}</p></div>
+            <div class="user-avatar">👤</div>
+        `;
+        messagesArea.appendChild(msg);
+        scrollToBottom();
+    }
+
+    function addAIMessage(text, propertyCards = null, suggestions = null, readyToGenerate = false) {
+        const msg = document.createElement('div');
+        msg.className = 'message ai-msg';
+
+        let contentHtml = formatMarkdown(text);
+
+        // Property cards
+        if (propertyCards && propertyCards.length > 0) {
+            contentHtml += '<div class="property-cards">';
+            for (const card of propertyCards) {
+                const displayVal = typeof card.value === 'number' 
+                    ? (card.value > 100 ? card.value.toLocaleString() : card.value.toFixed(2))
+                    : card.value;
+                contentHtml += `
+                    <div class="prop-card">
+                        <span class="prop-icon">${card.icon}</span>
+                        <div class="prop-info">
+                            <div class="prop-label">${card.display_name}</div>
+                            <div class="prop-value">${displayVal} ${card.unit}</div>
+                            ${card.source_material ? `<div class="prop-source">from ${card.source_material}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            contentHtml += '</div>';
+        }
+
+        // Suggestions
+        if (suggestions && suggestions.length > 0) {
+            contentHtml += '<div class="suggestions">';
+            for (const s of suggestions) {
+                contentHtml += `<button class="suggestion-chip" onclick="useSuggestion(this, '${escapeAttr(s)}')">${escapeHtml(s)}</button>`;
+            }
+            contentHtml += '</div>';
+        }
+
+        msg.innerHTML = `
+            <div class="ai-avatar">⚛</div>
+            <div class="msg-content">${contentHtml}</div>
+        `;
+        messagesArea.appendChild(msg);
+
+        // Generate CTA
+        if (readyToGenerate) {
+            const cta = document.createElement('div');
+            cta.className = 'generate-cta visible';
+            cta.innerHTML = `
+                <button class="btn-generate-chat" onclick="onGenerateClick()">
+                    ✨ Synthesize 3 Candidates
+                </button>
+            `;
+            messagesArea.appendChild(cta);
+        }
+
+        scrollToBottom();
+    }
+
+    function useSuggestion(btn, text) {
+        if (text.toLowerCase() === 'start new design') {
+            startNewChat();
+            return;
+        }
+        chatInput.value = text;
+        autoResize(chatInput);
+        sendMessage();
+    }
+
+    function onGenerateClick() {
+        // Disable ALL generate CTA buttons to prevent double-clicks
+        document.querySelectorAll('.btn-generate-chat').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+        });
+
+        if (isWaitingForAI || isGenerating) {
+            console.warn('[Generate] Blocked: already in progress.', { isWaitingForAI, isGenerating });
+            return;
+        }
+        chatInput.value = 'Generate!';
+        sendMessage();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GENERATION FLOW
+    // ═══════════════════════════════════════════════════════════════════════
+
+    async function triggerGeneration(params) {
+        isGenerating = true;
+
+        // Use unique IDs to avoid conflicts with previous generation step elements
+        const genId = Date.now();
+
+        // Add generation loading steps
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message ai-msg';
+        loadingDiv.innerHTML = `
+            <div class="ai-avatar">⚛</div>
+            <div class="msg-content">
+                <div class="gen-loading visible">
+                    <div class="gen-spinner"></div>
+                    <div class="gen-loading-text">Synthesizing Candidates</div>
+                    <div class="gen-steps">
+                        <div class="gen-step active" id="genStep1_${genId}">
+                            <span class="gen-step-icon">◉</span>
+                            <span>Parsing constraints & mapping to latent space...</span>
+                        </div>
+                        <div class="gen-step" id="genStep2_${genId}">
+                            <span class="gen-step-icon">○</span>
+                            <span>Running EGNN reverse diffusion (200 steps)...</span>
+                        </div>
+                        <div class="gen-step" id="genStep3_${genId}">
+                            <span class="gen-step-icon">○</span>
+                            <span>Applying PINO-FNO spectral refinement...</span>
+                        </div>
+                        <div class="gen-step" id="genStep4_${genId}">
+                            <span class="gen-step-icon">○</span>
+                            <span>Validating with RDKit + Lipinski scoring...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        messagesArea.appendChild(loadingDiv);
+        scrollToBottom();
+
+        // Animate steps
+        const stepTimers = [
+            setTimeout(() => advanceStep(`genStep1_${genId}`, `genStep2_${genId}`), 2000),
+            setTimeout(() => advanceStep(`genStep2_${genId}`, `genStep3_${genId}`), 5000),
+            setTimeout(() => advanceStep(`genStep3_${genId}`, `genStep4_${genId}`), 8000),
+        ];
+
+        try {
+            const resp = await fetch('/api/generate_from_chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    params: params || {}
+                })
+            });
+
+            const data = await resp.json();
+            stepTimers.forEach(clearTimeout);
+
+            // Remove loading
+            loadingDiv.remove();
+
+            if (!data.success) {
+                addAIMessage('⚠️ Generation failed: ' + (data.error || 'Unknown error'));
+                return;
+            }
+
+            // Render results header
+            const headerMsg = document.createElement('div');
+            headerMsg.className = 'message ai-msg';
+            let headerHtml = `<p><strong>✅ Generation complete!</strong> Here are your 3 optimized candidates, ranked by thermodynamic stability:</p>`;
+
+            // Show design summary
+            if (data.design_summary && data.design_summary.properties_targeted && data.design_summary.properties_targeted.length > 0) {
+                headerHtml += '<div class="property-cards">';
+                for (const pt of data.design_summary.properties_targeted) {
+                    const dv = typeof pt.value === 'number' ? (pt.value > 100 ? pt.value.toLocaleString() : pt.value.toFixed(2)) : pt.value;
+                    headerHtml += `
+                        <div class="prop-card">
+                            <span class="prop-icon">${pt.icon}</span>
+                            <div class="prop-info">
+                                <div class="prop-label">${pt.name}</div>
+                                <div class="prop-value">${dv} ${pt.unit || ''}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                headerHtml += '</div>';
+            }
+
+            headerMsg.innerHTML = `
+                <div class="ai-avatar">⚛</div>
+                <div class="msg-content">${headerHtml}</div>
+            `;
+            messagesArea.appendChild(headerMsg);
+
+            // Render molecule cards — use unique IDs per generation cycle
+            const molViewerOffset = genId;
+            data.molecules.forEach((mol, idx) => {
+                renderMoleculeCard(mol, idx, molViewerOffset);
+            });
+
+            // Post-generation message
+            generatedMolecules = true;
+            addAIMessage(
+                'Want to **refine** these results? You can say things like:\n• *"Make it stronger"*\n• *"Reduce density"*\n• *"Add corrosion resistance like platinum"*\n\nOr start a completely new design!',
+                null,
+                ['Make it stronger', 'More transparent', 'More flexible', 'Reduce weight', 'Start new design'],
+                false
+            );
+
+        } catch (err) {
+            stepTimers.forEach(clearTimeout);
+            if (loadingDiv.parentNode) loadingDiv.remove();
+            addAIMessage('⚠️ Generation failed: ' + err.message);
+        } finally {
+            // ALWAYS reset flags, even on error
+            isGenerating = false;
+            isWaitingForAI = false;
+            btnSend.disabled = false;
+        }
+    }
+
+    function advanceStep(currentId, nextId) {
+        const current = document.getElementById(currentId);
+        const next = document.getElementById(nextId);
+        if (current) {
+            current.classList.remove('active');
+            current.classList.add('done');
+            current.querySelector('.gen-step-icon').textContent = '✓';
+        }
+        if (next) {
+            next.classList.add('active');
+            next.querySelector('.gen-step-icon').textContent = '◉';
+        }
+    }
+
+    function renderMoleculeCard(mol, idx, viewerOffset = 0) {
+        const card = document.createElement('div');
+        card.className = 'molecule-result-card';
+        
+        const stabilityClass = mol.stability_score > 0.8 ? 'high' : mol.stability_score > 0.5 ? 'medium' : 'low';
+        const stabilityLabel = mol.stability_score > 0.8 ? 'High Stability' : mol.stability_score > 0.5 ? 'Moderate' : 'Low';
+
+        // Use unique viewer ID to avoid conflicts with previous generation results
+        const viewerId = `molViewer_${viewerOffset}_${idx}`;
+
+        card.innerHTML = `
+            <div class="mol-card-header">
+                <span class="mol-rank">Candidate #${idx + 1}</span>
+                <span class="mol-stability-badge ${stabilityClass}">${stabilityLabel}</span>
+            </div>
+            <div class="mol-card-body">
+                <div class="mol-viewer-container">
+                    <div id="${viewerId}" class="mol-viewer-3d"></div>
+                </div>
+                <div class="mol-details">
+                    <div class="mol-insight">
+                        <strong>AI Insight:</strong> ${mol.ai_insight || 'Candidate generated via EGNN + PINO refinement.'}
+                    </div>
+                    <div class="mol-metrics">
+                        <div class="mol-metric">
+                            <span class="mol-metric-label">Gibbs Free Energy</span>
+                            <span class="mol-metric-value glow-purple">${mol.gibbs_energy} eV</span>
+                        </div>
+                        <div class="mol-metric">
+                            <span class="mol-metric-label">PDE Residual</span>
+                            <span class="mol-metric-value glow-green">∇V ≈ ${mol.pde_residual_final || '0.0001'}</span>
+                        </div>
+                        <div class="mol-metric">
+                            <span class="mol-metric-label">Lipinski</span>
+                            <span class="mol-metric-value">${mol.lipinski_pass ? '✅ PASS' : '⚠️ FAIL'}</span>
+                        </div>
+                        <div class="mol-metric">
+                            <span class="mol-metric-label">Atoms</span>
+                            <span class="mol-metric-value">${mol.num_atoms}</span>
+                        </div>
+                    </div>
+                    <div class="mol-smiles">${mol.smiles || 'SMILES N/A'}</div>
+                </div>
+            </div>
+        `;
+        messagesArea.appendChild(card);
+
+        // Init 3D viewer
+        setTimeout(() => {
+            try {
+                const container = document.getElementById(viewerId);
+                if (!container) { console.warn('Viewer container not found:', viewerId); return; }
+                const viewer = $3Dmol.createViewer(container, {
+                    backgroundColor: '#0d0d18',
+                    antialias: true
+                });
+                if (mol.sdf && mol.sdf !== "null" && mol.sdf.length > 10) {
+                    viewer.addModel(mol.sdf, 'sdf');
+                    viewer.setStyle({}, {
+                        stick: { radius: 0.15, colorscheme: 'Jmol' },
+                        sphere: { scale: 0.3, colorscheme: 'Jmol' }
+                    });
+                } else if (mol.xyz && mol.xyz.length > 10) {
+                    viewer.addModel(mol.xyz, 'xyz');
+                    viewer.setStyle({}, {
+                        sphere: { scale: 0.4, colorscheme: 'Jmol' }
+                    });
+                }
+                viewer.zoomTo();
+                viewer.spin('y', 0.5);
+                viewer.render();
+            } catch (e) {
+                console.warn('3Dmol viewer init failed for candidate', viewerId, e);
+            }
+        }, 500);
+
+        scrollToBottom();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function showTyping() {
+        let indicator = document.querySelector('.typing-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = `
+                <div class="ai-avatar">⚛</div>
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            messagesArea.appendChild(indicator);
+        }
+        indicator.classList.add('visible');
+        scrollToBottom();
+    }
+
+    function hideTyping() {
+        const indicator = document.querySelector('.typing-indicator');
+        if (indicator) indicator.remove();
+    }
+
+    function scrollToBottom() {
+        requestAnimationFrame(() => {
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        });
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function escapeAttr(str) {
+        return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    function formatMarkdown(text) {
+        // Simple markdown: **bold**, *italic*, `code`, bullet points, newlines
+        let html = escapeHtml(text);
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+        html = html.replace(/^• (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br>');
+        html = '<p>' + html + '</p>';
+        return html;
+    }
+    </script>
+</body>
+</html>

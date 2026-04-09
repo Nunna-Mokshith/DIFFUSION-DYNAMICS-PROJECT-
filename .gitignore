@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data/Models (large files)
+data/raw/gdb9.sdf
+*.h5
+*.hdf5
+*.pkl
+*.pth
+*.pt
+*.ckpt
+*.npy
+*.npz
+
+# Environment
+.env
+*.log
+
+# Node modules (if any frontend deps)
+node_modules/
