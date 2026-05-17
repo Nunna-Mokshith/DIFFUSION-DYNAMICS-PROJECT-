@@ -1,40 +1,27 @@
 # Python
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
 *.egg-info/
 dist/
 build/
-.eggs/
-*.egg
-venv/
-env/
-.venv/
+
+# Data files (large)
+data/raw/gdb9.sdf
+data/raw/gdb9.sdf.csv
+data/raw/uncharacterized.txt
+data/processed/
+
+# Model checkpoints (large)
+models/*.pt
+
+# Results
+results/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Data/Models (large files)
-data/raw/gdb9.sdf
-*.h5
-*.hdf5
-*.pkl
-*.pth
-*.pt
-*.ckpt
-*.npy
-*.npz
-
-# Environment
-.env
-*.log
-
-# Node modules (if any frontend deps)
-node_modules/

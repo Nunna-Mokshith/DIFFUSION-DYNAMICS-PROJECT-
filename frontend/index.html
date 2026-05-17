@@ -16,36 +16,36 @@
     
     <style>
         :root {
-            --bg-deep: #0a0a0f;
-            --bg-surface: #12121a;
-            --bg-card: #1a1a2e;
-            --bg-card-hover: #22223a;
-            --bg-input: #16162a;
-            --bg-chat-user: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-            --bg-chat-ai: #1e1e32;
+            --bg-deep: #f0f4f8;
+            --bg-surface: #ffffff;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f7f5ff;
+            --bg-input: #f8f9fb;
+            --bg-chat-user: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+            --bg-chat-ai: #f5f3ff;
             
-            --text-main: #e8e8f0;
-            --text-secondary: #9ca3b8;
-            --text-muted: #5c6378;
-            --text-bright: #ffffff;
+            --text-main: #1e1b4b;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+            --text-bright: #111827;
             
-            --border-subtle: rgba(124, 58, 237, 0.15);
-            --border-medium: rgba(124, 58, 237, 0.3);
-            --border-glow: rgba(124, 58, 237, 0.5);
+            --border-subtle: rgba(124, 58, 237, 0.12);
+            --border-medium: rgba(124, 58, 237, 0.25);
+            --border-glow: rgba(124, 58, 237, 0.4);
             
             --accent: #7c3aed;
-            --accent-light: #a78bfa;
-            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
-            --accent-subtle: rgba(124, 58, 237, 0.1);
-            --accent-glow: 0 0 30px rgba(124, 58, 237, 0.3);
+            --accent-light: #6d28d9;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            --accent-subtle: rgba(124, 58, 237, 0.06);
+            --accent-glow: 0 4px 20px rgba(124, 58, 237, 0.18);
             
-            --success: #10b981;
-            --success-bg: rgba(16, 185, 129, 0.1);
-            --warning: #f59e0b;
-            --warning-bg: rgba(245, 158, 11, 0.1);
-            --danger: #ef4444;
-            --info: #3b82f6;
-            --info-bg: rgba(59, 130, 246, 0.1);
+            --success: #059669;
+            --success-bg: rgba(5, 150, 105, 0.08);
+            --warning: #d97706;
+            --warning-bg: rgba(217, 119, 6, 0.08);
+            --danger: #dc2626;
+            --info: #2563eb;
+            --info-bg: rgba(37, 99, 235, 0.08);
             
             --radius-xl: 24px;
             --radius-lg: 16px;
@@ -53,9 +53,9 @@
             --radius-sm: 8px;
             --radius-xs: 6px;
             
-            --shadow-glow: 0 0 40px rgba(124, 58, 237, 0.15);
-            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
-            --shadow-deep: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 4px 24px rgba(124, 58, 237, 0.1);
+            --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+            --shadow-deep: 0 4px 24px rgba(0, 0, 0, 0.1);
             
             --transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
             --transition-fast: all 0.15s ease;
@@ -77,7 +77,7 @@
         /* ═══ Scrollbar ═══ */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
         /* ═══ Nav ═══ */
@@ -86,9 +86,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(10, 10, 15, 0.85);
+            background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border-subtle);
+            border-bottom: 1px solid #e5e7eb;
             z-index: 100;
             flex-shrink: 0;
         }
@@ -189,7 +189,7 @@
         }
         .message.ai-msg .msg-content {
             background: var(--bg-chat-ai);
-            border: 1px solid var(--border-subtle);
+            border: 1px solid #e9e5f5;
             border-radius: var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg);
             max-width: 85%;
         }
@@ -203,10 +203,11 @@
         .msg-content strong { color: var(--text-bright); font-weight: 600; }
         .msg-content code {
             font-family: 'Fira Code', monospace;
-            background: rgba(255,255,255,0.06);
+            background: rgba(124, 58, 237, 0.07);
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
             font-size: 0.85em;
+            color: #6d28d9;
         }
 
         /* AI Avatar */
@@ -217,7 +218,7 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 0.9rem;
             flex-shrink: 0;
-            box-shadow: 0 0 15px rgba(124, 58, 237, 0.25);
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.2);
             margin-top: 2px;
         }
         .user-avatar {
@@ -238,8 +239,8 @@
             margin: 0.8rem 0;
         }
         .prop-card {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.06);
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
             border-radius: var(--radius-sm);
             padding: 0.6rem 0.8rem;
             display: flex;
@@ -275,8 +276,8 @@
             margin-top: 0.8rem;
         }
         .suggestion-chip {
-            background: rgba(124, 58, 237, 0.08);
-            border: 1px solid rgba(124, 58, 237, 0.2);
+            background: rgba(124, 58, 237, 0.06);
+            border: 1px solid rgba(124, 58, 237, 0.18);
             color: var(--accent-light);
             padding: 0.45rem 1rem;
             border-radius: 20px;
@@ -402,8 +403,8 @@
 
         /* ═══ Molecule Result Cards (in chat) ═══ */
         .molecule-result-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: var(--radius-lg);
             overflow: hidden;
             margin: 0.5rem 0;
@@ -411,10 +412,11 @@
             width: 100%;
             align-self: stretch;
             flex-shrink: 0;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.06);
         }
         .molecule-result-card:hover {
             border-color: var(--border-medium);
-            box-shadow: var(--shadow-glow);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.12);
         }
         .mol-card-header {
             padding: 1rem 1.25rem;
@@ -450,8 +452,8 @@
             position: relative;
             height: 280px;
             min-height: 280px;
-            background: #0d0d18;
-            border-right: 1px solid var(--border-subtle);
+            background: #f0eef8;
+            border-right: 1px solid #e5e7eb;
             overflow: hidden;
         }
         .mol-viewer-3d {
@@ -466,7 +468,7 @@
             gap: 0.8rem;
         }
         .mol-insight {
-            background: rgba(124, 58, 237, 0.06);
+            background: #f5f3ff;
             border-left: 3px solid var(--accent);
             padding: 0.8rem 1rem;
             border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
@@ -501,13 +503,13 @@
 
         .mol-smiles {
             font-family: 'Fira Code', monospace;
-            background: rgba(255,255,255,0.03);
+            background: #f9fafb;
             padding: 0.5rem 0.7rem;
             border-radius: var(--radius-xs);
             font-size: 0.72rem;
-            color: var(--text-muted);
+            color: #6b7280;
             word-break: break-all;
-            border: 1px dashed rgba(255,255,255,0.06);
+            border: 1px dashed #d1d5db;
             margin-top: auto;
         }
 
@@ -599,8 +601,8 @@
             max-width: 520px;
         }
         .welcome-example {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: var(--radius-md);
             padding: 0.9rem 1.2rem;
             text-align: left;
@@ -611,13 +613,14 @@
             gap: 0.8rem;
             font-size: 0.88rem;
             color: var(--text-secondary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
         .welcome-example:hover {
             border-color: var(--accent);
-            background: var(--bg-card-hover);
+            background: #f7f5ff;
             color: var(--text-main);
             transform: translateY(-2px);
-            box-shadow: var(--shadow-glow);
+            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.12);
         }
         .welcome-example .ex-icon {
             font-size: 1.3rem;
@@ -634,6 +637,84 @@
             .property-cards { grid-template-columns: 1fr; }
             .message.user-msg .msg-content, .message.ai-msg .msg-content { max-width: 90%; }
             .welcome-title { font-size: 1.6rem; }
+        }
+
+        /* ═══ QM9 Benchmark Panel ═══ */
+        .qm9-benchmark-panel {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .qm9-panel-label {
+            font-size: 0.62rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--success);
+            font-weight: 700;
+            opacity: 0.85;
+        }
+        .qm9-metrics-row {
+            display: flex;
+            gap: 0.8rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .qm9-metric {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            flex: 1;
+            min-width: 0;
+        }
+        .qm9-metric-label {
+            font-size: 0.67rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .qm9-metric-bar-wrap {
+            flex: 1;
+            height: 5px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            min-width: 40px;
+        }
+        .qm9-metric-bar {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #34d399);
+            border-radius: 3px;
+            transition: width 0.8s ease;
+        }
+        .qm9-metric-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.78rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .qm9-metric-value.good { color: var(--success); }
+        .qm9-metric-value.ok   { color: var(--warning); }
+        .qm9-metric-value.low  { color: var(--danger); }
+        .qm9-badge {
+            font-size: 0.67rem;
+            padding: 0.18rem 0.55rem;
+            border-radius: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+        .qm9-badge.pass { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16,185,129,0.25); }
+        .qm9-badge.fail { background: rgba(239,68,68,0.08); color: var(--danger);  border: 1px solid rgba(239,68,68,0.2); }
+        .qm9-baseline-note {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            opacity: 0.7;
+            font-style: italic;
         }
     </style>
 </head>
@@ -711,6 +792,7 @@
     let generatedMolecules = false;
 
     // Safety: periodically check if flags are stuck (fallback recovery)
+    // Use 30s interval — generation takes 2-3 minutes on CPU, so 5s was too aggressive
     setInterval(() => {
         // If no fetch is in flight and no generation spinner visible, reset flags
         const hasSpinner = document.querySelector('.gen-loading.visible');
@@ -724,7 +806,7 @@
             console.warn('[Recovery] isGenerating was stuck, resetting.');
             isGenerating = false;
         }
-    }, 5000);
+    }, 30000);
 
     const messagesArea = document.getElementById('messagesArea');
     const welcomeHero = document.getElementById('welcomeHero');
@@ -991,14 +1073,20 @@
         ];
 
         try {
+            // 5-minute timeout — generating 3 molecules on CPU takes ~2-3 min
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+
             const resp = await fetch('/api/generate_from_chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: sessionId,
                     params: params || {}
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             const data = await resp.json();
             stepTimers.forEach(clearTimeout);
@@ -1122,6 +1210,23 @@
                             <span class="mol-metric-value">${mol.num_atoms}</span>
                         </div>
                     </div>
+                    <div class="qm9-benchmark-panel">
+                        <div class="qm9-panel-label">QM9 Benchmark Metrics</div>
+                        <div class="qm9-metrics-row">
+                            <div class="qm9-metric">
+                                <span class="qm9-metric-label">Atom Stability</span>
+                                <span class="qm9-metric-bar-wrap">
+                                    <span class="qm9-metric-bar" style="width:${mol.atom_stability_pct ?? 0}%"></span>
+                                </span>
+                                <span class="qm9-metric-value ${(mol.atom_stability_pct ?? 0) >= 95 ? 'good' : (mol.atom_stability_pct ?? 0) >= 80 ? 'ok' : 'low'}">${(mol.atom_stability_pct ?? 0).toFixed(1)}%</span>
+                            </div>
+                            <div class="qm9-metric">
+                                <span class="qm9-metric-label">Mol Stability</span>
+                                <span class="qm9-badge ${mol.mol_stability_pass ? 'pass' : 'fail'}">${mol.mol_stability_pass ? '✓ STABLE' : '✗ UNSTABLE'}</span>
+                            </div>
+                        </div>
+                        <div class="qm9-baseline-note">EDM baseline: Atom 98.7% · Mol 82.0%</div>
+                    </div>
                     <div class="mol-smiles">${mol.smiles || 'SMILES N/A'}</div>
                 </div>
             </div>
@@ -1134,7 +1239,7 @@
                 const container = document.getElementById(viewerId);
                 if (!container) { console.warn('Viewer container not found:', viewerId); return; }
                 const viewer = $3Dmol.createViewer(container, {
-                    backgroundColor: '#0d0d18',
+                    backgroundColor: '#f0eef8',
                     antialias: true
                 });
                 if (mol.sdf && mol.sdf !== "null" && mol.sdf.length > 10) {

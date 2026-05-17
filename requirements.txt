@@ -1,0 +1,24 @@
+# ── Diffusion Dynamics — Agentic Material Designer ──────────────────────────
+# Install with:  pip install -r requirements.txt
+# Tested on Python 3.10 / 3.11 / 3.13
+
+# Web server
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Deep learning
+torch>=2.0.0
+# torch-geometric and its dependencies (install via pip with --extra-index-url)
+# pip install torch_geometric
+# pip install torch_scatter torch_sparse -f https://data.pyg.org/whl/torch-2.0.0+cpu.html
+torch_geometric>=2.3.0
+
+# Cheminformatics
+rdkit>=2022.9.0
+
+# Scientific computing
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Utilities
+tqdm>=4.65.0

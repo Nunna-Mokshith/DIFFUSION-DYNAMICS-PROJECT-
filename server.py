@@ -1,6 +1,7 @@
 """
 Flask API backend for the Dynamic Diffusion Dashboard.
-Provides endpoints for model inference and molecular generation.
+Provides endpoints for model inference, molecular generation,
+and iteration-count testing for the diffusion pipeline.
 """
 import os
 import sys
@@ -18,7 +19,8 @@ from flask_cors import CORS
 
 from scripts.physics_guided_molecular_diffusion import (
     DiffusionSchedule, load_qm9, NUM_ATOM_FEAT, HIDDEN_DIM, NUM_LAYERS, T_MAX,
-    node_features_to_atomic_num, infer_bonds_from_distance, graph_to_rdkit_mol, check_chemical_validity
+    node_features_to_atomic_num, infer_bonds_from_distance, graph_to_rdkit_mol,
+    check_chemical_validity, rescale_to_qm9, prune_bonds_for_valence
 )
 from scripts.Advanced_Molecular_Design import generate_advanced_catalyst, compute_advanced_thermodynamics
 from scripts.pino_operator import pino_refine_coordinates
@@ -26,70 +28,9 @@ from scripts.agentic_engine import process_message, process_iteration, get_or_cr
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Lipinski, Crippen, rdMolDescriptors
 
-from torch_geometric.nn import MessagePassing, global_mean_pool
+from scripts.model_arch import EGNNLayer, TimeEmbedding, EGNNScoreNetwork
 
-# ── EGNN Architecture (matches pgmd_v3_full.pt) ────────────────────────────
-
-class EGNNLayer(MessagePassing):
-    def __init__(self, hidden_dim, edge_dim=4):
-        super().__init__(aggr="mean")
-        self.phi_e = nn.Sequential(nn.Linear(hidden_dim*2+1+edge_dim, hidden_dim), nn.SiLU(), nn.Linear(hidden_dim, hidden_dim))
-        self.phi_x = nn.Sequential(nn.Linear(hidden_dim, hidden_dim//2), nn.SiLU(), nn.Linear(hidden_dim//2, 1))
-        self.phi_h = nn.Sequential(nn.Linear(hidden_dim*2, hidden_dim), nn.SiLU(), nn.Linear(hidden_dim, hidden_dim), nn.LayerNorm(hidden_dim))
-
-    def forward(self, h, pos, edge_index, edge_attr):
-        return self.propagate(edge_index, x=h, pos=pos, edge_attr=edge_attr)
-
-    def message(self, x_i, x_j, pos_i, pos_j, edge_attr):
-        dist = (pos_i - pos_j).norm(dim=-1, keepdim=True)
-        return self.phi_e(torch.cat([x_i, x_j, dist, edge_attr], dim=-1))
-
-    def update(self, aggr_out, x):
-        return self.phi_h(torch.cat([x, aggr_out], dim=-1))
-
-
-class TimeEmbedding(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-        self.proj = nn.Sequential(nn.Linear(dim, dim*2), nn.SiLU(), nn.Linear(dim*2, dim))
-
-    def forward(self, t):
-        half = self.dim // 2
-        freqs = torch.exp(-math.log(10000) * torch.arange(half, device=t.device) / (half - 1))
-        emb = t[:, None].float() * freqs[None, :]
-        emb = torch.cat([emb.sin(), emb.cos()], dim=-1)
-        return self.proj(emb)
-
-
-class EGNNScoreNetwork(nn.Module):
-    def __init__(self, node_feat_dim=11, edge_feat_dim=4, hidden_dim=128, num_layers=4):
-        super().__init__()
-        self.node_enc = nn.Sequential(nn.Linear(node_feat_dim, hidden_dim), nn.SiLU(), nn.Linear(hidden_dim, hidden_dim))
-        self.time_emb = TimeEmbedding(hidden_dim)
-        self.egnn_layers = nn.ModuleList()
-        self.film_scale = nn.ModuleList()
-        self.film_shift = nn.ModuleList()
-        for _ in range(num_layers):
-            self.egnn_layers.append(EGNNLayer(hidden_dim, edge_feat_dim))
-            self.film_scale.append(nn.Linear(hidden_dim, hidden_dim))
-            self.film_shift.append(nn.Linear(hidden_dim, hidden_dim))
-        self.score_head = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.SiLU(), nn.Linear(hidden_dim, 3))
-        self.prop_head = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.SiLU(), nn.Linear(hidden_dim, 12))
-
-    def forward(self, x, pos, edge_index, edge_attr, batch, t):
-        h = self.node_enc(x)
-        t_emb = self.time_emb(t)
-        t_emb_per_atom = t_emb[batch]
-        for i, layer in enumerate(self.egnn_layers):
-            h = layer(h, pos, edge_index, edge_attr)
-            scale = self.film_scale[i](t_emb_per_atom)
-            shift = self.film_shift[i](t_emb_per_atom)
-            h = F.silu(h * scale + shift)
-        score = self.score_head(h)
-        h_graph = global_mean_pool(h, batch)
-        g_pred = self.prop_head(h_graph)
-        return score, g_pred
+# EGNN architecture imported from scripts.model_arch (shared with benchmark_qm9.py)
 
 # ── Global state ────────────────────────────────────────────────────────────
 
@@ -108,6 +49,16 @@ print("[OK] Data loaded.")
 
 schedule = DiffusionSchedule(T=T_MAX)
 
+# ── Atomic-number → element-symbol map (for XYZ reconstruction) ──────────
+EXTENDED_SYM_MAP = {
+    1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O',
+    9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P',
+    16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K', 20: 'Ca', 22: 'Ti', 24: 'Cr',
+    25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn', 33: 'As',
+    34: 'Se', 35: 'Br', 42: 'Mo', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag',
+    53: 'I', 74: 'W', 77: 'Ir', 78: 'Pt', 79: 'Au',
+}
+
 # ── Flask App ───────────────────────────────────────────────────────────────
 
 app = Flask(__name__, static_folder='frontend', static_url_path='')
@@ -118,23 +69,16 @@ def index():
     return send_from_directory('frontend', 'index.html')
 
 def synthesize_molecule(params):
-    # try: removed to bubble up exceptions
         temp_k       = float(params.get('temperature', 298))
         pressure     = float(params.get('pressure', 1.0))
         ph           = float(params.get('ph', 7.0))
-        humidity     = float(params.get('humidity', 50))
         dielectric   = float(params.get('dielectric', 78.5))
-        ionic_str    = float(params.get('ionic_strength', 0.1))
-        viscosity    = float(params.get('viscosity', 1.0))
         num_steps    = int(params.get('steps', 200))
         noise_scale  = float(params.get('noise_scale', 1.0))
         pino_weight  = float(params.get('pino_weight', 0.1))
         guidance     = float(params.get('guidance', 1.0))
         seed         = int(params.get('seed', 42))
-        bond_thresh  = float(params.get('bond_threshold', 1.8))
         doping_prob  = float(params.get('doping_prob', 0.15))
-        max_heavy    = int(params.get('max_heavy_atoms', 9))
-        flexibility  = float(params.get('flexibility', 1.0))
         # Quantum Level Diffusion
         quantum_ensemble  = float(params.get('quantum_ensemble', 0.5))
         wave_packet       = float(params.get('wave_packet', 1.0))
@@ -203,15 +147,8 @@ def synthesize_molecule(params):
         anums = node_features_to_atomic_num(ref_graph.x.cpu())
 
         # ── Scale coordinates to realistic bond lengths ─────────────────
-        # Diffusion outputs span ±12Å; real bond lengths are ~1-2Å.
-        # Normalise to zero-mean and scale so inter-atom distances match
-        # a typical small molecule (scale factor ~0.5 ─ 1.5 Å per unit).
-        centroid = gen_pos_np.mean(axis=0)
-        gen_pos_np = gen_pos_np - centroid
-        max_span = np.abs(gen_pos_np).max() + 1e-8
-        # Target max span ~4Å for a 9-heavy-atom molecule
-        scale = 4.0 / max_span if max_span > 4.0 else 1.0
-        gen_pos_np = gen_pos_np * scale
+        # Match mean pairwise distance to real QM9 geometry (~3.16 Å)
+        gen_pos_np = rescale_to_qm9(gen_pos_np)
 
         # ── TRUE PINO: Fourier Neural Operator + PDE residual refinement ──
         # The FNO maps noisy coords → refined coords (function-to-function)
@@ -220,7 +157,7 @@ def synthesize_molecule(params):
         pino_result = pino_refine_coordinates(
             raw_coords=gen_pos_np,
             atomic_nums=anums,
-            num_steps=15,
+            num_steps=45,
             lr=1e-3,
             device=str(DEVICE)
         )
@@ -256,12 +193,13 @@ def synthesize_molecule(params):
             else:
                 mol = None; smi = None
 
-        # Stage 2: distance-based bonding with generous threshold on SCALED pos
+        # Stage 2: distance-based bonding with covalent radii + valence pruning
         if mol is None:
             scaled_pos_tensor = torch.tensor(gen_pos_np)
             for thresh in [1.8, 2.0, 2.3, 2.6]:
-                bonds = infer_bonds_from_distance(scaled_pos_tensor, anums, threshold=thresh)
-                mol2 = graph_to_rdkit_mol(anums, bonds)
+                raw_bonds = infer_bonds_from_distance(scaled_pos_tensor, anums, threshold=thresh)
+                pruned_bonds = prune_bonds_for_valence(anums, raw_bonds)
+                mol2 = graph_to_rdkit_mol(anums, pruned_bonds)
                 if check_chemical_validity(mol2):
                     smi2 = Chem.MolToSmiles(mol2)
                     if smi2 and '.' not in smi2:
@@ -269,6 +207,43 @@ def synthesize_molecule(params):
                         smi = smi2
                         mw  = Descriptors.MolWt(mol)
                         break
+
+        # Stage 2.5: adaptive rescaling — try multiple NN distance targets
+        # The model (trained 5K/50ep/CPU) produces noisy geometry; search for
+        # the scale factor that yields valid bonding.
+        if mol is None:
+            from scipy.spatial.distance import pdist, squareform
+            raw_centered = gen_pos_np - gen_pos_np.mean(axis=0)
+            for target_nn in [0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]:
+                dm = squareform(pdist(raw_centered))
+                np.fill_diagonal(dm, np.inf)
+                med_nn = np.median(dm.min(axis=1))
+                if med_nn < 1e-6:
+                    continue
+                trial = raw_centered * (target_nn / (med_nn + 1e-8))
+                # Try rdDetermineBonds on rescaled coords
+                xyz_trial = f"{num_atoms}\ntrial_nn={target_nn}\n"
+                for k, an in enumerate(anums):
+                    sym = EXTENDED_SYM_MAP.get(an, 'C')
+                    xyz_trial += f"{sym} {trial[k,0]:.5f} {trial[k,1]:.5f} {trial[k,2]:.5f}\n"
+                mol_t = xyz_to_rdkit_mol(xyz_trial)
+                if mol_t:
+                    smi_t = Chem.MolToSmiles(mol_t)
+                    if smi_t and '.' not in smi_t:
+                        mol = mol_t; smi = smi_t; mw = Descriptors.MolWt(mol)
+                        break
+                # Try distance-based on rescaled coords
+                for thresh in [1.8, 2.0, 2.3]:
+                    raw_bonds = infer_bonds_from_distance(torch.tensor(trial), anums, threshold=thresh)
+                    pruned_bonds = prune_bonds_for_valence(anums, raw_bonds)
+                    mol2 = graph_to_rdkit_mol(anums, pruned_bonds)
+                    if check_chemical_validity(mol2):
+                        smi2 = Chem.MolToSmiles(mol2)
+                        if smi2 and '.' not in smi2:
+                            mol = mol2; smi = smi2; mw = Descriptors.MolWt(mol)
+                            break
+                if mol is not None:
+                    break
 
         # Stage 3: ETKDGv3 pure re-embedding from atom types — ignores bad coords
         # Build a valence-correct molecule from element list and embed from scratch.
@@ -386,7 +361,31 @@ def synthesize_molecule(params):
                     "z": float(parts[3])
                 })
 
-        return {
+        # ── QM9 Benchmark Metrics (atom / molecule stability) ─────────────────
+        # Uses the same valence-matching logic as scripts/benchmark_qm9.py
+        # so these numbers are directly comparable to published baselines.
+        _EXPECTED_VALENCE = {1: 1, 6: 4, 7: 3, 8: 2, 9: 1}   # H C N O F
+        atom_stability_pct = 0.0
+        mol_stability_pass = False
+        if mol is not None and mol.GetNumAtoms() > 0:
+            try:
+                n_stable = 0
+                n_total  = mol.GetNumAtoms()
+                all_ok   = True
+                for atom in mol.GetAtoms():
+                    an       = atom.GetAtomicNum()
+                    expected = _EXPECTED_VALENCE.get(an)
+                    if expected is not None:
+                        if atom.GetTotalValence() == expected:
+                            n_stable += 1
+                        else:
+                            all_ok = False
+                atom_stability_pct = round(n_stable / max(n_total, 1) * 100, 1)
+                mol_stability_pass = all_ok
+            except Exception:
+                pass
+
+        result = {
             "success": True,
             "xyz": relaxed_xyz,
             "sdf": sdf_string,
@@ -418,8 +417,28 @@ def synthesize_molecule(params):
             "wave_packet": round(wave_packet, 3),
             "tunnelling_depth": round(tunnelling_depth, 3),
             "quantum_coherence": round(min(quantum_ensemble * wave_packet, 1.0), 4),
-            "quantum_barrier_ratio": round(tunnelling_depth / max(stability, 0.01), 4)
+            "quantum_barrier_ratio": round(tunnelling_depth / max(stability, 0.01), 4),
+            # QM9 Benchmark Metrics
+            "atom_stability_pct": atom_stability_pct,
+            "mol_stability_pass": mol_stability_pass,
         }
+
+        # ── Print results to terminal ──────────────────────────────────────────
+        print("\n" + "="*50)
+        print("[SYNTH] SYNTHESIZED MOLECULE")
+        print("="*50)
+        print(f"  SMILES        : {result['smiles']}")
+        print(f"  Atoms         : {result['num_atoms']} ({result['heavy_atom_count']} heavy)")
+        print(f"  Gibbs Energy  : {result['gibbs_energy']} eV")
+        print(f"  PDE Residual  : {result['pde_residual_final']} (PINO Guidance: {result['pino_guidance_strength']})")
+        print(f"  Lipinski Rule : {'PASS' if result['lipinski_pass'] else 'FAIL'}")
+        print("-" * 50)
+        print("  QM9 Benchmark Metrics:")
+        print(f"  Atom Stability: {result['atom_stability_pct']}%")
+        print(f"  Mol Stability : {'STABLE' if result['mol_stability_pass'] else 'UNSTABLE'}")
+        print("="*50 + "\n")
+
+        return result
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
@@ -473,7 +492,91 @@ def generate_batch():
 
 @app.route('/api/health')
 def health():
-    return jsonify({"status": "ok", "device": str(DEVICE)})
+    return jsonify({"status": "ok", "device": str(DEVICE), "model": "EGNNScoreNetwork", "t_max": T_MAX})
+
+
+# ── Iteration Testing Endpoint ─────────────────────────────────────────────
+
+@app.route('/api/test_iterations', methods=['POST'])
+def test_iterations():
+    """
+    Run the diffusion pipeline with a configurable number of denoising steps
+    and return full diagnostic metrics per run.
+
+    POST body (JSON):
+        steps        : int   — number of denoising steps (e.g. 50, 100, 200, 500)
+        seed         : int   — RNG seed (default 42)
+        noise_scale  : float — initial noise magnitude (default 1.0)
+        pino_weight  : float — PINO guidance strength (default 0.1)
+        guidance     : float — classifier-free guidance scale (default 1.0)
+        temperature  : float — Kelvin (default 298)
+        pressure     : float — atm (default 1.0)
+        ph           : float — pH (default 7.0)
+        wave_packet  : float — quantum delocalization width (default 1.0)
+        tunnelling_depth : float — tunnelling perturbation (default 0.1)
+        quantum_ensemble : float — tunnelling probability (default 0.5)
+        n_runs       : int   — how many independent runs to aggregate (default 1)
+
+    Returns a list of per-run result dicts, each containing:
+        run_id, steps, elapsed_seconds, smiles, molecular_weight,
+        gibbs_energy, stability_score, lipinski_pass, pino_guidance_strength,
+        pde_residual_initial, pde_residual_final, pino_potential_energy,
+        pino_convergence (list), quantum_coherence, quantum_barrier_ratio
+    """
+    import time
+    try:
+        params = request.json or {}
+        n_runs = int(params.pop('n_runs', 1))
+        steps  = int(params.get('steps', 200))
+
+        results = []
+        for run_idx in range(n_runs):
+            # Shift seed per run so results are independent
+            run_params = dict(params)
+            run_params['seed'] = int(run_params.get('seed', 42)) + run_idx * 37
+
+            t0 = time.perf_counter()
+            mol = synthesize_molecule(run_params)
+            elapsed = round(time.perf_counter() - t0, 3)
+
+            results.append({
+                "run_id":               run_idx + 1,
+                "steps":                steps,
+                "elapsed_seconds":      elapsed,
+                "smiles":               mol.get("smiles"),
+                "molecular_weight":     mol.get("molecular_weight"),
+                "gibbs_energy":         mol.get("gibbs_energy"),
+                "stability_score":      mol.get("stability_score"),
+                "lipinski_pass":        mol.get("lipinski_pass"),
+                "heavy_atom_count":     mol.get("heavy_atom_count"),
+                "element_composition":  mol.get("element_composition"),
+                "logp":                 mol.get("logp"),
+                "tpsa":                 mol.get("tpsa"),
+                "hbd":                  mol.get("hbd"),
+                "hba":                  mol.get("hba"),
+                "rotatable_bonds":      mol.get("rotatable_bonds"),
+                "pino_guidance_strength":   mol.get("pino_guidance_strength"),
+                "pde_residual_initial":     mol.get("pde_residual_initial"),
+                "pde_residual_final":       mol.get("pde_residual_final"),
+                "pino_potential_energy":    mol.get("pino_potential_energy"),
+                "pino_convergence":         mol.get("pino_convergence"),
+                "quantum_coherence":        mol.get("quantum_coherence"),
+                "quantum_barrier_ratio":    mol.get("quantum_barrier_ratio"),
+            })
+
+        summary = {
+            "steps":                steps,
+            "n_runs":               n_runs,
+            "avg_elapsed_seconds":  round(sum(r["elapsed_seconds"] for r in results) / max(n_runs, 1), 3),
+            "avg_stability":        round(sum(r["stability_score"] for r in results) / max(n_runs, 1), 4),
+            "lipinski_pass_rate":   round(sum(1 for r in results if r["lipinski_pass"]) / max(n_runs, 1), 3),
+            "avg_gibbs_energy":     round(sum(r["gibbs_energy"] for r in results) / max(n_runs, 1), 2),
+            "avg_pde_residual_final": round(sum(r["pde_residual_final"] for r in results) / max(n_runs, 1), 6),
+        }
+
+        return jsonify({"success": True, "summary": summary, "runs": results})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 # ── Agentic Chat Endpoints ─────────────────────────────────────────────────

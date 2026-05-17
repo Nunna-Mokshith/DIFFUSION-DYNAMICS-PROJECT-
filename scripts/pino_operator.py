@@ -81,16 +81,24 @@ class SpectralConv1d(nn.Module):
 class FourierNeuralOperator(nn.Module):
     """
     Fourier Neural Operator for molecular coordinate refinement.
-    
-    Architecture:
-        Input (N×3) → Lift to d channels → [SpectralConv + Local Conv + Residual] × L → Project to 3
-    
+
+    Architecture (upgraded):
+        Input (N×3) → Lift to d channels
+        → [SpectralConv + Local Conv + Skip + Residual] × L
+        → Project to 3
+
+    Improvements over baseline:
+        - 6 FNO layers (was 4) for deeper spectral mixing
+        - 48-wide channels (was 32) for richer representations
+        - 12 Fourier modes (was 8) to capture longer-range correlations
+        - Skip connections every 2 layers for gradient flow
+
     This is the Neural Operator that maps function-to-function:
         f: R^(N×3) → R^(N×3)
     (noisy coordinate field → equilibrium coordinate field)
     """
 
-    def __init__(self, modes=8, width=32, num_layers=4):
+    def __init__(self, modes=12, width=48, num_layers=6):
         super().__init__()
         self.modes = modes
         self.width = width
@@ -114,7 +122,7 @@ class FourierNeuralOperator(nn.Module):
             nn.LayerNorm(width) for _ in range(num_layers)
         ])
 
-        # Projection layers: width → 3
+        # Projection layers: width → width//2 → 3
         self.fc_proj1 = nn.Linear(width, width // 2)
         self.fc_proj2 = nn.Linear(width // 2, 3)
 
@@ -135,14 +143,24 @@ class FourierNeuralOperator(nn.Module):
         # Transpose for conv: (1, width, N)
         x = x.permute(0, 2, 1)
 
-        # FNO layers with residual connections
+        # FNO layers with residual connections + skip every 2 layers
+        skip = None
         for i in range(self.num_layers):
+            # Save skip connection every 2 layers
+            if i % 2 == 0:
+                skip = x
+
             # Spectral path (global, Fourier)
             x_spectral = self.spectral_convs[i](x)
             # Local path (pointwise)
             x_local = self.local_convs[i](x)
             # Combine with residual
             x = x + x_spectral + x_local
+
+            # Add skip connection at end of each 2-layer block
+            if i % 2 == 1 and skip is not None:
+                x = x + skip
+
             # Transpose for LayerNorm: (1, N, width)
             x = x.permute(0, 2, 1)
             x = self.norms[i](x)
@@ -246,24 +264,28 @@ def pde_residual_force_balance(coords, atomic_nums):
 # 4. PINO COORDINATE REFINEMENT — Test-Time Optimization
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def pino_refine_coordinates(raw_coords, atomic_nums, num_steps=15, lr=1e-3, device='cpu'):
+def pino_refine_coordinates(raw_coords, atomic_nums, num_steps=45, lr=1e-3, device='cpu'):
     """
     Apply the PINO (Physics-Informed Neural Operator) to refine molecular coordinates.
-    
+
     This is the core PINO loop:
       1. A Fourier Neural Operator maps noisy coords → refined coords (function-to-function)
       2. The PDE residual (Lennard-Jones force balance) is the physics loss
       3. The FNO is optimized at test-time using ONLY the PDE residual (no labels needed)
-    
+
     This is a valid PINO paradigm (Li et al., 2021).
-    
+
+    Upgraded configuration:
+      - 45 optimisation steps (was 15) for deeper convergence
+      - FNO: 12 modes / 48 width / 6 layers with skip connections
+
     Args:
         raw_coords: np.ndarray (N, 3) — raw diffusion output coordinates
         atomic_nums: list of int — atomic numbers
-        num_steps: int — number of PINO optimization steps
+        num_steps: int — number of PINO optimization steps (default 45)
         lr: float — learning rate for test-time optimization
         device: str — 'cpu' or 'cuda'
-    
+
     Returns:
         dict with:
             'refined_coords': np.ndarray (N, 3)
@@ -275,11 +297,11 @@ def pino_refine_coordinates(raw_coords, atomic_nums, num_steps=15, lr=1e-3, devi
     coords_tensor = torch.tensor(raw_coords, dtype=torch.float32, device=device)
     N = coords_tensor.shape[0]
 
-    # Initialize FNO
+    # Initialize upgraded FNO (12 modes, 48 width, 6 layers with skip)
     fno = FourierNeuralOperator(
-        modes=min(8, N // 2),  # modes can't exceed N/2
-        width=32,
-        num_layers=3
+        modes=min(12, N // 2),  # modes can't exceed N/2
+        width=48,
+        num_layers=6
     ).to(device)
 
     optimizer = torch.optim.Adam(fno.parameters(), lr=lr)

@@ -593,6 +593,18 @@ ATOMIC_NUM_TO_SYMBOL = {1: "H", 6: "C", 7: "N", 8: "O", 9: "F"}
 # Standard valences for validity checking
 VALENCE_MAP = {1: 1, 6: 4, 7: 3, 8: 2, 9: 1}
 
+# Covalent radii in Ångströms (Cordero et al., 2008)
+COVALENT_RADII = {
+    1: 0.31, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57,
+    15: 1.07, 16: 1.05, 17: 1.02,
+}
+
+# Maximum allowed valence per element (for bond pruning)
+MAX_VALENCE = {1: 1, 6: 4, 7: 3, 8: 2, 9: 1, 15: 5, 16: 6, 17: 1}
+
+# Mean pairwise distance in real QM9 molecules (computed from dataset)
+QM9_MEAN_PAIRWISE_DIST = 3.16  # Ångströms
+
 
 def node_features_to_atomic_num(x: Tensor) -> list:
     """
@@ -604,30 +616,109 @@ def node_features_to_atomic_num(x: Tensor) -> list:
     return [FEAT_TO_ATOMIC_NUM.get(idx, 6) for idx in atom_type_idx]
 
 
+def rescale_to_qm9(coords_np):
+    """
+    Rescale generated coordinates so the local bonding geometry matches
+    real QM9 molecules.
+
+    Strategy: match the median nearest-neighbor distance to real QM9
+    molecules (~1.15 Å, which corresponds to C-H and C-C bond lengths).
+    This ensures bonded atom pairs land at realistic distances for
+    rdDetermineBonds and covalent-radii bond inference to work.
+    """
+    from scipy.spatial.distance import pdist, squareform
+    centroid = coords_np.mean(axis=0)
+    centered = coords_np - centroid
+    n = len(centered)
+    if n < 2:
+        return centered
+
+    # Compute nearest-neighbor distances
+    dist_matrix = squareform(pdist(centered))
+    np.fill_diagonal(dist_matrix, np.inf)
+    nn_dists = dist_matrix.min(axis=1)
+    median_nn = np.median(nn_dists)
+
+    if median_nn < 1e-6:
+        return centered
+
+    # Real QM9 median nearest-neighbor distance (C-H ~1.09, C-C ~1.54)
+    TARGET_NN_DIST = 1.15
+    scale = TARGET_NN_DIST / (median_nn + 1e-8)
+    return centered * scale
+
+
 def infer_bonds_from_distance(pos: Tensor,
                                atomic_nums: list,
                                threshold: float = 1.8) -> list:
     """
-    Naively infer bonds from 3-D geometry: connect atoms within `threshold` Å.
-    This is a simplified rule-based approach; in production one would use
-    OpenBabel or a learned bond-classifier.
+    Infer bonds from 3-D geometry using element-pair-specific covalent
+    radius cutoffs.  Falls back to a global threshold if covalent radii
+    are unavailable for a given element.
+
+    Bond cutoff for pair (i, j):
+        d_max = cov_radius_i + cov_radius_j + tolerance
+
+    The `threshold` parameter is used as the tolerance added on top of
+    the sum of covalent radii.
     """
+    tolerance = threshold - 1.2  # offset so default 1.8 → tol=0.6
+    tolerance = max(tolerance, 0.3)  # at least 0.3 Å tolerance
     N = pos.shape[0]
     bonds = []
-    pos_np = pos.cpu().numpy()
+    pos_np = pos.cpu().numpy() if hasattr(pos, 'cpu') else np.asarray(pos)
+
     for i in range(N):
+        ri = COVALENT_RADII.get(atomic_nums[i], 0.76)
         for j in range(i + 1, N):
+            rj = COVALENT_RADII.get(atomic_nums[j], 0.76)
             dist = np.linalg.norm(pos_np[i] - pos_np[j])
-            # Use heuristic threshold (could be element-pair specific)
-            if dist < threshold:
-                bonds.append((i, j, Chem.rdchem.BondType.SINGLE))
+            cutoff = ri + rj + tolerance
+            if dist < cutoff:
+                bonds.append((i, j, dist, Chem.rdchem.BondType.SINGLE))
     return bonds
+
+
+def prune_bonds_for_valence(atomic_nums: list, bonds: list) -> list:
+    """
+    Remove the longest bonds first whenever an atom exceeds its maximum
+    allowed valence.  This prevents SanitizeMol from rejecting molecules
+    that have the right connectivity but too many bonds on some atoms.
+
+    Args:
+        atomic_nums: list of atomic numbers (length N)
+        bonds: list of (i, j, dist, bond_type) tuples — MUST include dist
+
+    Returns:
+        pruned list of (i, j, bond_type) tuples (dist removed)
+    """
+    # Sort ALL bonds longest-first so we remove the weakest first
+    sorted_bonds = sorted(bonds, key=lambda b: -b[2])
+
+    # Build adjacency count
+    valence_count = {i: 0 for i in range(len(atomic_nums))}
+    kept = []
+
+    # Iterate shortest-first to keep the best bonds
+    for b in reversed(sorted_bonds):
+        i, j = b[0], b[1]
+        btype = b[3]
+        max_i = MAX_VALENCE.get(atomic_nums[i], 4)
+        max_j = MAX_VALENCE.get(atomic_nums[j], 4)
+
+        if valence_count[i] < max_i and valence_count[j] < max_j:
+            kept.append((i, j, btype))
+            valence_count[i] += 1
+            valence_count[j] += 1
+
+    return kept
 
 
 def graph_to_rdkit_mol(atomic_nums: list,
                         bonds: list) -> Optional[Chem.Mol]:
     """
     Construct an RDKit Mol object from atomic numbers + bond list.
+    Accepts bonds as either (i, j, bond_type) or (i, j, dist, bond_type).
     Returns None on failure.
     """
     try:
@@ -635,7 +726,11 @@ def graph_to_rdkit_mol(atomic_nums: list,
         for an in atomic_nums:
             atom = Chem.Atom(an)
             mol.AddAtom(atom)
-        for (i, j, btype) in bonds:
+        for bond in bonds:
+            if len(bond) == 4:
+                i, j, _dist, btype = bond
+            else:
+                i, j, btype = bond
             mol.AddBond(i, j, btype)
         mol = mol.GetMol()
         Chem.SanitizeMol(mol)          # triggers valence check
